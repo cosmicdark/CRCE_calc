@@ -1,12 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["@sparticuz/chromium", "playwright-core"],
-  experimental: {
-    outputFileTracingIncludes: {
-      "/api/scrape": ["./node_modules/@sparticuz/chromium/bin/**/*"],
-    },
-  },
+  serverExternalPackages: ["@sparticuz/chromium-min", "playwright-core"],
 };
 
 export default nextConfig;

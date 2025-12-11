@@ -92,16 +92,16 @@ export async function POST(req: Request) {
 
     // ---------------- BROWSER LAUNCH LOGIC ----------------
     if (process.env.NODE_ENV === "production") {
-      // Vercel / Production Environment
-      const chromium = (await import("@sparticuz/chromium")).default;
+      // Vercel / Production Environment - use chromium-min with remote binary
+      const chromium = (await import("@sparticuz/chromium-min")).default;
       
-      // Explicitly set graphics mode to false to avoid needing swiftshader
-      (chromium as any).setGraphicsMode = false;
+      // Remote URL for chromium binary (hosted by Sparticuz)
+      const chromiumPack = "https://github.com/AntDX316/chromium-for-lambda/releases/download/v131.0.0/chromium-v131.0.0-pack.tar";
       
       browser = await playwright.launch({
-        args: (chromium as any).args,
-        executablePath: await (chromium as any).executablePath(),
-        headless: (chromium as any).headless,
+        args: chromium.args,
+        executablePath: await chromium.executablePath(chromiumPack),
+        headless: true,
       });
     } else {
       // Local Development
