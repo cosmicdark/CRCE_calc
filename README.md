@@ -1,44 +1,36 @@
-# CRCE Result Scraper
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-A full-stack Next.js application to scrape and display student results from the CRCE Contineo portal.
+## Getting Started
 
-## Features
-
-- **Serverless Scraping**: Uses Playwright Core + @sparticuz/chromium to run on Vercel Serverless Functions.
-- **Modern UI**: Built with Next.js, Tailwind CSS, and a clean "Emerald" theme.
-- **Responsive**: Works great on mobile and desktop.
-
-## Setup & Installation
-
-### 1. Install Dependencies
-
-```bash
-cd frontend
-npm install
-```
-
-### 2. Run Locally
+First, run the development server:
 
 ```bash
 npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
 ```
 
-The app will be available at `http://localhost:3000`.
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-> **Note for Local Dev**: The app uses the `playwright` package locally (which includes browser binaries) and `@sparticuz/chromium` in production. Ensure `playwright` is installed in `devDependencies`.
+You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-## Deployment (Vercel)
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-This app is designed to be deployed 100% on Vercel.
+## Learn More
 
-1. Push the `frontend` folder (or the root if you prefer) to GitHub.
-2. Import the project into Vercel.
-3. **Important**: Set the **Root Directory** to `frontend` in Vercel Project Settings.
-4. Deploy!
+To learn more about Next.js, take a look at the following resources:
 
-Vercel will automatically detect the Next.js app and deploy the API routes as serverless functions.
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
-### Troubleshooting Vercel Deployment
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-- **Timeout**: Scraping can take time. If you hit the 10s timeout on the Free tier, you might need to upgrade to Pro (60s timeout) or optimize the scraping logic.
-- **Memory**: Chromium is heavy. If you see memory errors, ensure you are using the `@sparticuz/chromium` package (which we are).
+## Deploy on Vercel
+
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
