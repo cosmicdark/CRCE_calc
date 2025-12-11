@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
+import { chromium } from "playwright";
 import { load } from "cheerio";
-import { chromium } from "playwright-core";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -34,7 +34,9 @@ function parseMark(raw: string | null) {
   if (!raw) return null;
   raw = raw.trim();
   if (!raw.includes("/")) return null;
-  const [obt, max] = raw.split("/").map((v) => Number(v.replace(/[^\d.]/g, "")));
+  const [obt, max] = raw
+    .split("/")
+    .map((v) => Number(v.replace(/[^\d.]/g, "")));
   if (Number.isFinite(obt) && Number.isFinite(max)) {
     return { obtained: obt, max };
   }
@@ -62,43 +64,35 @@ export async function POST(req: Request) {
     const { prn, dob } = await req.json();
 
     if (!prn || !dob) {
-      return NextResponse.json({ error: "prn and dob required" }, { status: 400 });
+      return NextResponse.json(
+        { error: "prn and dob required" },
+        { status: 400 }
+      );
     }
 
     const parts = dob.split(/[-/]/);
     if (parts.length < 3) {
-      return NextResponse.json({ error: "Invalid DOB format. Use DD-MM-YYYY" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Invalid DOB format. Use DD-MM-YYYY" },
+        { status: 400 }
+      );
     }
     const [ddR, mmR, yyyy] = parts;
     const dd = ddR.padStart(2, "0");
     const mm = mmR.padStart(2, "0");
 
-    // ---------------- BROWSER LAUNCH LOGIC ----------------
-    const isProduction = process.env.NODE_ENV === "production" || process.env.VERCEL;
+    // Launch browser - Playwright will use its bundled Chromium
+    browser = await chromium.launch({
+      headless: true,
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+      ],
+    });
 
-    if (isProduction) {
-      // Use Browserless.io cloud browser service (free tier available)
-      // Get free API key at https://www.browserless.io/
-      const browserlessToken = process.env.BROWSERLESS_TOKEN;
-      
-      if (!browserlessToken) {
-        return NextResponse.json(
-          { error: "BROWSERLESS_TOKEN environment variable not set. Get a free API key at browserless.io" },
-          { status: 500 }
-        );
-      }
-
-      browser = await chromium.connectOverCDP(
-        `wss://chrome.browserless.io?token=${browserlessToken}`
-      );
-    } else {
-      // Local Development - use full Playwright
-      const { chromium: playwrightChromium } = await import("playwright");
-      browser = await playwrightChromium.launch({ headless: true });
-    }
-
-    const context = await browser.newContext();
-    const page = await context.newPage();
+    const page = await browser.newPage();
 
     // 1) OPEN LOGIN PAGE
     await page.goto("https://crce-students.contineo.in/parents/", {
@@ -116,27 +110,26 @@ export async function POST(req: Request) {
     await page.selectOption('select[name="mm"]', mm);
     await page.selectOption('select[name="yyyy"]', yyyy);
 
-    // 4) SUBMIT
     await Promise.all([
       page.waitForNavigation({ waitUntil: "networkidle" }),
       page.click('input[type="submit"], button[type="submit"]'),
     ]);
 
-    // 5) CHECK DASHBOARD
+    // 4) CHECK DASHBOARD
     if (!page.url().includes("task=dashboard")) {
       const html = await page.content();
       await browser.close();
       return NextResponse.json(
         {
-          error: "Login failed. Please check PRN and DOB.",
+          error: "Login failed",
           currentUrl: page.url(),
-          snippet: html.substring(0, 500),
+          snippet: html.substring(0, 1500),
         },
-        { status: 401 }
+        { status: 500 }
       );
     }
 
-    // 6) EXTRACT SUBJECT LINKS
+    // 5) EXTRACT SUBJECT LINKS
     const dashboardHtml = await page.content();
     const $ = load(dashboardHtml);
 
@@ -151,10 +144,14 @@ export async function POST(req: Request) {
 
     const subjects: any[] = [];
 
-    // 7) VISIT EACH SUBJECT PAGE
+    // 6) VISIT EACH SUBJECT PAGE
     for (const url of subjectLinks) {
       try {
-        await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
+        await page.goto(url, {
+          waitUntil: "domcontentloaded",
+          timeout: 30000,
+        });
+
         const html = await page.content();
         const $$ = load(html);
 
@@ -163,12 +160,11 @@ export async function POST(req: Request) {
           $$("h3.md-card-head-text span").first().text().trim() ||
           null;
 
-        let row =
-          $$("table.cn-cie-table tbody tr").first().length
-            ? $$("table.cn-cie-table tbody tr").first()
-            : $$("table.uk-table tbody tr").first().length
-            ? $$("table.uk-table tbody tr").first()
-            : $$("table tbody tr").first();
+        let row = $$("table.cn-cie-table tbody tr").first().length
+          ? $$("table.cn-cie-table tbody tr").first()
+          : $$("table.uk-table tbody tr").first().length
+          ? $$("table.uk-table tbody tr").first()
+          : $$("table tbody tr").first();
 
         const cells = row
           .find("td")
@@ -176,7 +172,9 @@ export async function POST(req: Request) {
           .get();
 
         const markCells = cells.filter((c: string) => c.includes("/"));
-        const parsed = markCells.map((m: string) => parseMark(m)).filter(Boolean);
+        const parsed = markCells
+          .map((m: string) => parseMark(m))
+          .filter(Boolean);
 
         if (parsed.length === 0) continue;
 
@@ -207,9 +205,15 @@ export async function POST(req: Request) {
       }
     }
 
-    // 8) TOTALS
-    const totalMarksAll = subjects.reduce((a: number, s: any) => a + (s.totalObt || 0), 0);
-    const maxMarksAll = subjects.reduce((a: number, s: any) => a + (s.totalMax || 0), 0);
+    // 7) TOTALS
+    const totalMarksAll = subjects.reduce(
+      (a: number, s: any) => a + (s.totalObt || 0),
+      0
+    );
+    const maxMarksAll = subjects.reduce(
+      (a: number, s: any) => a + (s.totalMax || 0),
+      0
+    );
     const sgpa = computeSGPA(subjects);
 
     await browser.close();
