@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { load } from "cheerio";
+import path from "path";
 
 export const maxDuration = 60; // Allow up to 60 seconds for scraping
 export const dynamic = "force-dynamic";
@@ -90,22 +91,31 @@ export async function POST(req: Request) {
     const mm = mmR.padStart(2, "0");
 
     // ---------------- BROWSER LAUNCH LOGIC ----------------
-    const isProduction = process.env.NODE_ENV === "production" || process.env.VERCEL;
-    
+    const isProduction =
+      process.env.NODE_ENV === "production" || process.env.VERCEL;
+
     let page: any;
-    
+
     if (isProduction) {
       // Vercel / Production Environment - use puppeteer-core with @sparticuz/chromium
       const puppeteer = (await import("puppeteer-core")).default;
       const chromium = (await import("@sparticuz/chromium")).default;
-      
+
+      const chromiumPath = path.join(process.cwd(), "node_modules", "@sparticuz", "chromium");
+      const libPath = path.join(chromiumPath, "lib");
+      const existingLdPath = process.env.LD_LIBRARY_PATH ?? "";
+      const ldSegments = [existingLdPath, libPath, chromiumPath]
+        .filter(Boolean)
+        .join(":");
+      process.env.LD_LIBRARY_PATH = ldSegments;
+
       browser = await puppeteer.launch({
         args: chromium.args,
         defaultViewport: chromium.defaultViewport,
         executablePath: await chromium.executablePath(),
         headless: chromium.headless,
       });
-      
+
       page = await browser.newPage();
 
       // 1) OPEN LOGIN PAGE
@@ -135,7 +145,7 @@ export async function POST(req: Request) {
     } else {
       // Local Development - use full Playwright (which works!)
       const { chromium: playwrightChromium } = await import("playwright");
-      
+
       browser = await playwrightChromium.launch({ headless: true });
       page = await browser.newPage();
 
@@ -164,16 +174,16 @@ export async function POST(req: Request) {
 
     // 4) CHECK LOGIN SUCCESS - check if we reached the dashboard
     const pageUrl = page.url();
-    
+
     // The original working code checks for "task=dashboard" in URL
     if (!pageUrl.includes("task=dashboard")) {
       const html = await page.content();
       await browser.close();
       return NextResponse.json(
-        { 
+        {
           error: "Login failed. Please check PRN and DOB.",
           currentUrl: pageUrl,
-          snippet: html.substring(0, 500)
+          snippet: html.substring(0, 500),
         },
         { status: 401 }
       );
@@ -184,7 +194,7 @@ export async function POST(req: Request) {
     const $dash = load(dashboardHtml);
 
     const subjectLinks: string[] = [];
-    
+
     // First try to find ciedetails links (the original approach that worked)
     $dash("a").each((_, el) => {
       const href = $dash(el).attr("href");
@@ -231,9 +241,9 @@ export async function POST(req: Request) {
 
     for (const url of subjectLinks) {
       try {
-        await page.goto(url, { 
-          waitUntil: isProduction ? "networkidle2" : "domcontentloaded", 
-          timeout: 30000 
+        await page.goto(url, {
+          waitUntil: isProduction ? "networkidle2" : "domcontentloaded",
+          timeout: 30000,
         });
         const html = await page.content();
         const $$ = load(html);
@@ -245,10 +255,11 @@ export async function POST(req: Request) {
           null;
 
         // FIND THE TABLE row containing marks
-        let row =
-          $$("table.cn-cie-table tbody tr").first().length ? $$("table.cn-cie-table tbody tr").first() :
-          $$("table.uk-table tbody tr").first().length ? $$("table.uk-table tbody tr").first() :
-          $$("table tbody tr").first();
+        let row = $$("table.cn-cie-table tbody tr").first().length
+          ? $$("table.cn-cie-table tbody tr").first()
+          : $$("table.uk-table tbody tr").first().length
+          ? $$("table.uk-table tbody tr").first()
+          : $$("table tbody tr").first();
 
         const cells = row
           .find("td")
@@ -258,7 +269,9 @@ export async function POST(req: Request) {
         // NEW LOGIC: extract *all* "X/Y" marks dynamically
         const markCells = cells.filter((c: string) => c.includes("/"));
 
-        const parsed = markCells.map((m: string) => parseMark(m)).filter(Boolean);
+        const parsed = markCells
+          .map((m: string) => parseMark(m))
+          .filter(Boolean);
 
         if (parsed.length === 0) continue;
 
@@ -291,8 +304,14 @@ export async function POST(req: Request) {
     }
 
     // 7) TOTALS
-    const totalMarksAll = subjects.reduce((a: number, s: any) => a + (s.totalObt || 0), 0);
-    const maxMarksAll = subjects.reduce((a: number, s: any) => a + (s.totalMax || 0), 0);
+    const totalMarksAll = subjects.reduce(
+      (a: number, s: any) => a + (s.totalObt || 0),
+      0
+    );
+    const maxMarksAll = subjects.reduce(
+      (a: number, s: any) => a + (s.totalMax || 0),
+      0
+    );
 
     const sgpa = computeSGPA(subjects);
 
