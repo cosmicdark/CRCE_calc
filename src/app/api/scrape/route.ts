@@ -48,7 +48,8 @@ function computeSGPA(subjects: any[]) {
     .map((s) => s.gradePoint)
     .filter((x) => x !== null && x !== undefined);
   if (pts.length === 0) return null;
-  return Math.round((pts.reduce((a, b) => a + b, 0) / pts.length) * 100) / 100;
+  const rawSgpa = pts.reduce((a, b) => a + b, 0) / pts.length;
+  return parseFloat(rawSgpa.toFixed(2));
 }
 
 function isDoubleMinor(subjectName: string | null) {
@@ -199,8 +200,8 @@ export async function POST(req: Request) {
           url,
           subjectName,
           marks: markCells,
-          totalObt,
-          totalMax,
+          totalObt: parseFloat(totalObt.toFixed(2)),
+          totalMax: parseFloat(totalMax.toFixed(2)),
           percentage,
           grade,
           gradePoint,
@@ -216,13 +217,15 @@ export async function POST(req: Request) {
     );
 
     // 7) TOTALS
-    const totalMarksAll = filteredSubjects.reduce(
-      (a: number, s: any) => a + (s.totalObt || 0),
-      0
+    const totalMarksAll = parseFloat(
+      filteredSubjects
+        .reduce((a: number, s: any) => a + (s.totalObt || 0), 0)
+        .toFixed(2)
     );
-    const maxMarksAll = filteredSubjects.reduce(
-      (a: number, s: any) => a + (s.totalMax || 0),
-      0
+    const maxMarksAll = parseFloat(
+      filteredSubjects
+        .reduce((a: number, s: any) => a + (s.totalMax || 0), 0)
+        .toFixed(2)
     );
     const sgpa = computeSGPA(filteredSubjects);
 
