@@ -101,19 +101,25 @@ export async function POST(req: Request) {
       const puppeteer = (await import("puppeteer-core")).default;
       const chromium = (await import("@sparticuz/chromium")).default;
 
-      const chromiumPath = path.join(process.cwd(), "node_modules", "@sparticuz", "chromium");
-      const libPath = path.join(chromiumPath, "lib");
+      const executablePath = await chromium.executablePath();
+      const chromiumDir = path.dirname(executablePath);
+      const libCandidates = [
+        path.join(chromiumDir, "lib"),
+        path.join(chromiumDir, "..", "lib"),
+        chromiumDir,
+      ];
       const existingLdPath = process.env.LD_LIBRARY_PATH ?? "";
-      const ldSegments = [existingLdPath, libPath, chromiumPath]
+      const ldSegments = [existingLdPath, ...libCandidates]
         .filter(Boolean)
         .join(":");
       process.env.LD_LIBRARY_PATH = ldSegments;
 
       browser = await puppeteer.launch({
-        args: chromium.args,
+        args: [...chromium.args, "--single-process"],
         defaultViewport: chromium.defaultViewport,
-        executablePath: await chromium.executablePath(),
+        executablePath,
         headless: chromium.headless,
+        env: { ...process.env, LD_LIBRARY_PATH: ldSegments },
       });
 
       page = await browser.newPage();
