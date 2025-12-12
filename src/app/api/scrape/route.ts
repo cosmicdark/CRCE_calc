@@ -160,6 +160,11 @@ export async function POST(req: Request) {
           $$("h3.md-card-head-text span").first().text().trim() ||
           null;
 
+        // Filter out subjects with code starting with 25DM
+        if (subjectName && subjectName.includes("25DM")) {
+          continue;
+        }
+
         let row = $$("table.cn-cie-table tbody tr").first().length
           ? $$("table.cn-cie-table tbody tr").first()
           : $$("table.uk-table tbody tr").first().length
@@ -184,6 +189,10 @@ export async function POST(req: Request) {
           totalObt += m.obtained;
           totalMax += m.max;
         });
+
+        // Round to max 3 decimal places
+        totalObt = Math.round(totalObt * 1000) / 1000;
+        totalMax = Math.round(totalMax * 1000) / 1000;
 
         const percentage =
           totalMax > 0 ? Math.round((totalObt / totalMax) * 10000) / 100 : null;
