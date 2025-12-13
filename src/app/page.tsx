@@ -22,6 +22,12 @@ interface Result {
   subjects: Subject[];
 }
 
+// Helper to format numbers to max 2 decimal places
+const formatNumber = (num: number | null | undefined): string => {
+  if (num === null || num === undefined) return "0";
+  return Number(num.toFixed(2)).toString();
+};
+
 // Simple Icons
 const UserIcon = () => (
   <svg
@@ -240,7 +246,7 @@ export default function Home() {
                 Current SGPA
               </p>
               <h2 className="text-5xl font-bold mb-2">
-                {result.sgpa || "N/A"}
+                {result.sgpa !== null ? result.sgpa.toFixed(2) : "N/A"}
               </h2>
               <div className="flex gap-4 mt-4">
                 <div className="bg-white/20 rounded-xl px-4 py-2 backdrop-blur-sm">
@@ -252,7 +258,7 @@ export default function Home() {
                     Total Marks
                   </p>
                   <p className="font-bold">
-                    {result.totalMarksAll} / {result.maxMarksAll}
+                    {formatNumber(result.totalMarksAll)} / {formatNumber(result.maxMarksAll)}
                   </p>
                 </div>
                 <div className="bg-white/20 rounded-xl px-4 py-2 backdrop-blur-sm">
@@ -423,7 +429,7 @@ export default function Home() {
                           {sub.subjectName || "Unknown Subject"}
                         </h4>
                         <p className="text-xs text-gray-500 mt-1">
-                          Marks: {sub.totalObt}/{sub.totalMax}
+                          Marks: {formatNumber(sub.totalObt)}/{formatNumber(sub.totalMax)}
                         </p>
                       </div>
                     </div>
@@ -433,7 +439,7 @@ export default function Home() {
                           isDarkMode ? "text-gray-200" : "text-gray-800"
                         }`}
                       >
-                        {sub.percentage}%
+                        {formatNumber(sub.percentage)}%
                       </p>
                       <p className="text-xs text-gray-400">Score</p>
                     </div>
