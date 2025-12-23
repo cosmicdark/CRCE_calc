@@ -19,24 +19,14 @@ const percentToGrade = (p: number | null | undefined) => {
 };
 
 const gradeToPoint: Record<string, number | null> = {
-  O: 10,
-  A: 9,
-  B: 8,
-  C: 7,
-  D: 6,
-  E: 5,
-  P: 4,
-  F: 0,
-  NA: null,
+  O: 10, A: 9, B: 8, C: 7, D: 6, E: 5, P: 4, F: 0, NA: null,
 };
 
 function parseMark(raw: string | null) {
   if (!raw) return null;
   raw = raw.trim();
   if (!raw.includes("/")) return null;
-  const [obt, max] = raw
-    .split("/")
-    .map((v) => Number(v.replace(/[^\d.]/g, "")));
+  const [obt, max] = raw.split("/").map((v) => Number(v.replace(/[^\d.]/g, "")));
   if (Number.isFinite(obt) && Number.isFinite(max)) {
     return { obtained: obt, max };
   }
@@ -44,18 +34,9 @@ function parseMark(raw: string | null) {
 }
 
 function computeSGPA(subjects: any[]) {
-  const pts = subjects
-    .map((s) => s.gradePoint)
-    .filter((x) => x !== null && x !== undefined);
+  const pts = subjects.map((s) => s.gradePoint).filter((x) => x !== null && x !== undefined);
   if (pts.length === 0) return null;
   return Math.round((pts.reduce((a, b) => a + b, 0) / pts.length) * 100) / 100;
-}
-
-function absoluteUrl(href: string | undefined) {
-  if (!href) return null;
-  if (href.startsWith("http")) return href;
-  if (href.startsWith("/")) return "https://crce-students.contineo.in" + href;
-  return "https://crce-students.contineo.in/parents/" + href;
 }
 
 export async function POST(req: Request) {
@@ -64,143 +45,132 @@ export async function POST(req: Request) {
     const { prn, dob } = await req.json();
 
     if (!prn || !dob) {
-      return NextResponse.json(
-        { error: "prn and dob required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "prn and dob required" }, { status: 400 });
     }
 
     const parts = dob.split(/[-/]/);
     if (parts.length < 3) {
-      return NextResponse.json(
-        { error: "Invalid DOB format. Use DD-MM-YYYY" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Invalid DOB format. Use DD-MM-YYYY" }, { status: 400 });
     }
     const [ddR, mmR, yyyy] = parts;
-    const dd = ddR.padStart(2, "0");
+    const dd = ddR.padStart(2, "0") + " "; // Trailing space required by portal
     const mm = mmR.padStart(2, "0");
 
-    // Launch browser - Playwright will use its bundled Chromium
+    // Launch browser
     browser = await chromium.launch({
       headless: true,
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
-      ],
+      args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
     });
 
     const page = await browser.newPage();
 
-    // 1) OPEN LOGIN PAGE
-    await page.goto("https://crce-students.contineo.in/parents/", {
-      waitUntil: "networkidle",
-      timeout: 60000,
-    });
-
-    // 2) ENSURE LOGIN FIELDS EXIST
-    await page.waitForSelector('input[name="username"]');
-    await page.waitForSelector('select[name="dd"]');
-
-    // 3) FILL LOGIN FORM
+    // 1) Login
+    await page.goto("https://crce-students.contineo.in/parents/", { waitUntil: "domcontentloaded", timeout: 30000 });
+    await page.waitForSelector('input[name="username"]', { timeout: 5000 });
+    
     await page.fill('input[name="username"]', prn);
     await page.selectOption('select[name="dd"]', dd);
     await page.selectOption('select[name="mm"]', mm);
     await page.selectOption('select[name="yyyy"]', yyyy);
 
     await Promise.all([
-      page.waitForNavigation({ waitUntil: "networkidle" }),
+      page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 15000 }),
       page.click('input[type="submit"], button[type="submit"]'),
     ]);
 
-    // 4) CHECK DASHBOARD
-    if (!page.url().includes("task=dashboard")) {
-      const html = await page.content();
+    // 2) Check login success
+    const html = await page.content();
+    if (load(html)('input[name="username"]').length > 0) {
       await browser.close();
-      return NextResponse.json(
-        {
-          error: "Login failed",
-          currentUrl: page.url(),
-          snippet: html.substring(0, 1500),
-        },
-        { status: 500 }
-      );
+      return NextResponse.json({
+        error: "Login failed - Invalid credentials or wrong DOB format",
+        hint: "Please check your PRN and DOB (format: DD-MM-YYYY)"
+      }, { status: 401 });
     }
 
-    // 5) EXTRACT SUBJECT LINKS
-    const dashboardHtml = await page.content();
-    const $ = load(dashboardHtml);
+    // 3) Wait for dashboard to load
+    try {
+      await page.waitForSelector('a[href*="task=ciedetails"]', { timeout: 8000 });
+    } catch (e) {
+      // Continue anyway
+    }
 
-    const subjectLinks = new Set<string>();
-    $("a").each((_, el) => {
-      const href = $(el).attr("href");
-      if (href && href.includes("task=ciedetails")) {
-        const url = absoluteUrl(href);
-        if (url) subjectLinks.add(url);
-      }
-    });
-
+    // 4) Get all CIE links
+    const cieLinks = await page.$$('a[href*="task=ciedetails"]');
     const subjects: any[] = [];
 
-    // 6) VISIT EACH SUBJECT PAGE
-    for (const url of subjectLinks) {
+    // 5) Visit each subject by clicking links (maintains session)
+    for (let i = 0; i < cieLinks.length; i++) {
       try {
-        await page.goto(url, {
-          waitUntil: "domcontentloaded",
-          timeout: 30000,
-        });
+        const links = await page.$$('a[href*="task=ciedetails"]');
+        if (i >= links.length) continue;
 
-        const html = await page.content();
-        const $$ = load(html);
+        await Promise.all([
+          page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 10000 }),
+          links[i].click()
+        ]);
 
-        const subjectName =
-          $$("caption").first().text().trim() ||
-          $$("h3.md-card-head-text span").first().text().trim() ||
-          null;
+        // Wait for table (reduced timeout for speed)
+        try {
+          await page.waitForSelector('table.cn-cie-table, table.uk-table', { timeout: 5000 });
+        } catch (e) {
+          // Continue anyway
+        }
+        await page.waitForTimeout(200);
 
-        // Filter out subjects with code starting with 25DM
+        const subjectHtml = await page.content();
+        const $$ = load(subjectHtml);
+
+        // Get subject name from caption (has the course name) or find h3 with course code pattern
+        let subjectName = $$("caption").first().text().trim();
+        if (!subjectName) {
+          // Look for h3 containing course code pattern like "25BSC12CE05"
+          $$("h3").each((_, el) => {
+            const text = $$(el).text().trim();
+            if (text.match(/\d{2}[A-Z]{2,3}\d{2}[A-Z]{2}\d{2}/)) {
+              subjectName = text;
+              return false; // break
+            }
+          });
+        }
+        if (!subjectName) subjectName = "Unknown Subject";
+
+        // Skip 25DM subjects
         if (subjectName && subjectName.includes("25DM")) {
+          await page.goBack({ waitUntil: "domcontentloaded" });
+          await page.waitForTimeout(200);
           continue;
         }
 
-        let row = $$("table.cn-cie-table tbody tr").first().length
+        const row = $$("table.cn-cie-table tbody tr").first().length
           ? $$("table.cn-cie-table tbody tr").first()
           : $$("table.uk-table tbody tr").first().length
           ? $$("table.uk-table tbody tr").first()
           : $$("table tbody tr").first();
 
-        const cells = row
-          .find("td")
-          .map((_: number, el: any) => $$(el).text().trim())
-          .get();
-
+        const cells = row.find("td").map((_: number, el: any) => $$(el).text().trim()).get();
         const markCells = cells.filter((c: string) => c.includes("/"));
-        const parsed = markCells
-          .map((m: string) => parseMark(m))
-          .filter(Boolean);
+        const parsed = markCells.map((m: string) => parseMark(m)).filter(Boolean);
 
-        if (parsed.length === 0) continue;
+        if (parsed.length === 0) {
+          await page.goBack({ waitUntil: "domcontentloaded" });
+          await page.waitForTimeout(200);
+          continue;
+        }
 
-        let totalObt = 0,
-          totalMax = 0;
-        parsed.forEach((m: any) => {
-          totalObt += m.obtained;
-          totalMax += m.max;
-        });
-
-        // Round to max 3 decimal places
+        let totalObt = 0, totalMax = 0;
+        parsed.forEach((m: any) => { totalObt += m.obtained; totalMax += m.max; });
         totalObt = Math.round(totalObt * 1000) / 1000;
         totalMax = Math.round(totalMax * 1000) / 1000;
 
-        const percentage =
-          totalMax > 0 ? Math.round((totalObt / totalMax) * 10000) / 100 : null;
+        const percentage = totalMax > 0 ? Math.round((totalObt / totalMax) * 10000) / 100 : null;
         const grade = percentage !== null ? percentToGrade(percentage) : "NA";
         const gradePoint = gradeToPoint[grade];
 
+        // Remove session tokens from URL before storing
+        const cleanUrl = page.url().split('&ksign=')[0].split('?ksign=')[0];
+
         subjects.push({
-          url,
           subjectName,
           marks: markCells,
           totalObt,
@@ -209,20 +179,23 @@ export async function POST(req: Request) {
           grade,
           gradePoint,
         });
+
+        await page.goBack({ waitUntil: "domcontentloaded" });
+        await page.waitForTimeout(200);
+
       } catch (err: any) {
-        subjects.push({ url, error: err.toString() });
+        try {
+          await page.goBack({ waitUntil: "domcontentloaded" });
+          await page.waitForTimeout(200);
+        } catch (e) {
+          // Ignore
+        }
       }
     }
 
-    // 7) TOTALS
-    const totalMarksAll = subjects.reduce(
-      (a: number, s: any) => a + (s.totalObt || 0),
-      0
-    );
-    const maxMarksAll = subjects.reduce(
-      (a: number, s: any) => a + (s.totalMax || 0),
-      0
-    );
+    // 6) Calculate totals
+    const totalMarksAll = subjects.reduce((a: number, s: any) => a + (s.totalObt || 0), 0);
+    const maxMarksAll = subjects.reduce((a: number, s: any) => a + (s.totalMax || 0), 0);
     const sgpa = computeSGPA(subjects);
 
     await browser.close();
@@ -236,7 +209,6 @@ export async function POST(req: Request) {
     });
   } catch (err: any) {
     if (browser) await browser.close();
-    console.error("Scrape error:", err);
-    return NextResponse.json({ error: err.toString() }, { status: 500 });
+    return NextResponse.json({ error: err.message || err.toString() }, { status: 500 });
   }
 }

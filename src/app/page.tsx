@@ -4,7 +4,6 @@ import { useState } from "react";
 import Link from "next/link";
 
 interface Subject {
-  url: string;
   subjectName: string | null;
   marks: string[];
   totalObt: number;
@@ -141,11 +140,30 @@ export default function Home() {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || "Something went wrong");
+        // Show more detailed error information
+        let errorMsg = data.error || "Something went wrong";
+        
+        // Add hint if available
+        if (data.hint) {
+          errorMsg += `\n\n💡 ${data.hint}`;
+        }
+        
+        // Add page content in development
+        if (data.pageContent && process.env.NODE_ENV === 'development') {
+          console.log("Page content after login:", data.pageContent);
+        }
+        
+        // Add debug info
+        if (data.debugInfo) {
+          console.log("Debug info:", data.debugInfo);
+        }
+        
+        throw new Error(errorMsg);
       }
 
       setResult(data);
     } catch (err: any) {
+      console.error("Fetch error:", err);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -380,8 +398,13 @@ export default function Home() {
                 </div>
 
                 {error && (
-                  <div className="bg-red-50 p-4 rounded-2xl border border-red-100 text-red-600 text-sm text-center">
-                    {error}
+                  <div className={`p-4 rounded-2xl border text-sm transition-colors duration-300 ${
+                    isDarkMode 
+                      ? "bg-red-900/20 border-red-800 text-red-300" 
+                      : "bg-red-50 border-red-100 text-red-600"
+                  }`}>
+                    <div className="font-semibold mb-2">⚠️ Error</div>
+                    <div className="whitespace-pre-line">{error}</div>
                   </div>
                 )}
               </div>
