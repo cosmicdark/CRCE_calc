@@ -118,6 +118,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState("Starting...");
 
   const toggleDarkMode = () => setIsDarkMode(!isDarkMode);
 
@@ -126,42 +127,56 @@ export default function Home() {
     setLoading(true);
     setError(null);
     setResult(null);
+    setLoadingMessage("Starting...");
 
     try {
-      // Use internal API route
-      const res = await fetch("/api/scrape", {
+      // Use fetch with streaming for real-time progress
+      const response = await fetch("/api/scrape", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prn, dob }),
       });
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        // Show more detailed error information
-        let errorMsg = data.error || "Something went wrong";
-        
-        // Add hint if available
-        if (data.hint) {
-          errorMsg += `\n\n💡 ${data.hint}`;
-        }
-        
-        // Add page content in development
-        if (data.pageContent && process.env.NODE_ENV === 'development') {
-          console.log("Page content after login:", data.pageContent);
-        }
-        
-        // Add debug info
-        if (data.debugInfo) {
-          console.log("Debug info:", data.debugInfo);
-        }
-        
-        throw new Error(errorMsg);
+      if (!response.ok && response.headers.get("content-type")?.includes("application/json")) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Something went wrong");
       }
 
-      setResult(data);
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) {
+        throw new Error("Failed to start streaming");
+      }
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const text = decoder.decode(value);
+        const lines = text.split("\n\n").filter(line => line.startsWith("data: "));
+
+        for (const line of lines) {
+          try {
+            const data = JSON.parse(line.replace("data: ", ""));
+            
+            if (data.type === "progress") {
+              setLoadingMessage(data.message);
+            } else if (data.type === "result") {
+              setResult(data.data);
+            } else if (data.type === "error") {
+              // Set error directly instead of throwing (which would be caught by inner catch)
+              setError(data.error);
+              setLoading(false);
+              return;
+            }
+          } catch (parseError) {
+            // Ignore JSON parse errors for incomplete chunks
+            if (parseError instanceof SyntaxError) continue;
+            throw parseError; // Re-throw other errors
+          }
+        }
+      }
     } catch (err: any) {
       console.error("Fetch error:", err);
       setError(err.message);
@@ -383,10 +398,16 @@ export default function Home() {
                       disabled={loading}
                       className={`w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-4 rounded-2xl shadow-lg transition-all transform active:scale-95 flex items-center justify-center gap-2 mt-4 ${
                       isDarkMode ? "shadow-emerald-900/20" : "shadow-emerald-200"
-                    }`}
+                    } ${loading ? "opacity-90 cursor-wait" : ""}`}
                     >
                       {loading ? (
-                        <span className="animate-pulse">Fetching...</span>
+                        <span className="flex items-center gap-2">
+                          <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                          </svg>
+                          <span>{loadingMessage}</span>
+                        </span>
                       ) : (
                         <>
                           <span>Get Results</span>
