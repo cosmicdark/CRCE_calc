@@ -1,11 +1,36 @@
-import { chromium } from "playwright";
+import { chromium as playwright } from "playwright-core";
+import chromium from "@sparticuz/chromium";
 import { load } from "cheerio";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
+// ---------------------- TYPES ------------------------
+interface Mark {
+  obtained: number;
+  max: number;
+}
+
+interface Subject {
+  subjectName: string;
+  marks: string[];
+  totalObt: number;
+  totalMax: number;
+  percentage: number | null;
+  grade: string;
+  gradePoint: number | null;
+}
+
+interface Result {
+  sgpa: number | null;
+  estimatedCgpa: number | null;
+  totalMarksAll: number;
+  maxMarksAll: number;
+  subjects: Subject[];
+}
+
 // ---------------------- GRADING HELPERS ------------------------
-const percentToGrade = (p: number | null | undefined) => {
+const percentToGrade = (p: number | null | undefined): string => {
   if (p === null || p === undefined) return "NA";
   if (p >= 85) return "O";
   if (p >= 80) return "A";
@@ -21,7 +46,7 @@ const gradeToPoint: Record<string, number | null> = {
   O: 10, A: 9, B: 8, C: 7, D: 6, E: 5, P: 4, F: 0, NA: null,
 };
 
-function parseMark(raw: string | null) {
+function parseMark(raw: string | null): Mark | null {
   if (!raw) return null;
   raw = raw.trim();
   if (!raw.includes("/")) return null;
@@ -32,8 +57,8 @@ function parseMark(raw: string | null) {
   return null;
 }
 
-function computeSGPA(subjects: any[]) {
-  const pts = subjects.map((s) => s.gradePoint).filter((x) => x !== null && x !== undefined);
+function computeSGPA(subjects: Subject[]): number | null {
+  const pts = subjects.map((s) => s.gradePoint).filter((x): x is number => x !== null && x !== undefined);
   if (pts.length === 0) return null;
   return Math.round((pts.reduce((a, b) => a + b, 0) / pts.length) * 100) / 100;
 }
@@ -67,7 +92,7 @@ export async function POST(req: Request) {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "progress", message, current, total })}\n\n`));
       };
 
-      const sendResult = (data: any) => {
+      const sendResult = (data: Result) => {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "result", data })}\n\n`));
       };
 
@@ -78,10 +103,19 @@ export async function POST(req: Request) {
       let browser;
       try {
         sendProgress("Launching browser...");
-        browser = await chromium.launch({
-          headless: true,
-          args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
-        });
+        
+        if (process.env.NODE_ENV === "production") {
+          browser = await playwright.launch({
+            args: chromium.args,
+            executablePath: await chromium.executablePath(),
+            headless: chromium.headless === "shell" ? true : chromium.headless,
+          });
+        } else {
+          browser = await playwright.launch({
+            headless: true,
+            args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
+          });
+        }
 
         const page = await browser.newPage();
 
@@ -111,12 +145,12 @@ export async function POST(req: Request) {
         sendProgress("Loading dashboard...");
         try {
           await page.waitForSelector('a[href*="task=ciedetails"]', { timeout: 8000 });
-        } catch (e) {
+        } catch {
           // Continue
         }
 
         const cieLinks = await page.$$('a[href*="task=ciedetails"]');
-        const subjects: any[] = [];
+        const subjects: Subject[] = [];
 
         for (let i = 0; i < cieLinks.length; i++) {
           try {
@@ -132,7 +166,7 @@ export async function POST(req: Request) {
 
             try {
               await page.waitForSelector('table.cn-cie-table, table.uk-table', { timeout: 3000 });
-            } catch (e) {
+            } catch {
               // Continue
             }
 
@@ -162,9 +196,10 @@ export async function POST(req: Request) {
               ? $$("table.uk-table tbody tr").first()
               : $$("table tbody tr").first();
 
-            const cells = row.find("td").map((_: number, el: any) => $$(el).text().trim()).get();
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const cells = row.find("td").map((_: number, el: unknown) => $$(el as any).text().trim()).get();
             const markCells = cells.filter((c: string) => c.includes("/"));
-            const parsed = markCells.map((m: string) => parseMark(m)).filter(Boolean);
+            const parsed = markCells.map((m: string) => parseMark(m)).filter((x): x is Mark => x !== null);
 
             if (parsed.length === 0) {
               await page.goBack({ waitUntil: "domcontentloaded" });
@@ -172,7 +207,7 @@ export async function POST(req: Request) {
             }
 
             let totalObt = 0, totalMax = 0;
-            parsed.forEach((m: any) => { totalObt += m.obtained; totalMax += m.max; });
+            parsed.forEach((m: Mark) => { totalObt += m.obtained; totalMax += m.max; });
             totalObt = Math.round(totalObt * 1000) / 1000;
             totalMax = Math.round(totalMax * 1000) / 1000;
 
@@ -192,18 +227,18 @@ export async function POST(req: Request) {
 
             await page.goBack({ waitUntil: "domcontentloaded" });
 
-          } catch (err: any) {
+          } catch (err: unknown) {
             try {
               await page.goBack({ waitUntil: "domcontentloaded" });
-            } catch (e) {
+            } catch {
               // Ignore
             }
           }
         }
 
         sendProgress("Calculating SGPA...");
-        const totalMarksAll = subjects.reduce((a: number, s: any) => a + (s.totalObt || 0), 0);
-        const maxMarksAll = subjects.reduce((a: number, s: any) => a + (s.totalMax || 0), 0);
+        const totalMarksAll = subjects.reduce((a: number, s: Subject) => a + (s.totalObt || 0), 0);
+        const maxMarksAll = subjects.reduce((a: number, s: Subject) => a + (s.totalMax || 0), 0);
         const sgpa = computeSGPA(subjects);
 
         await browser.close();
@@ -216,9 +251,9 @@ export async function POST(req: Request) {
           subjects,
         });
 
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (browser) await browser.close();
-        sendError(err.message || err.toString());
+        sendError(err instanceof Error ? err.message : String(err));
       }
 
       controller.close();
