@@ -45,9 +45,12 @@ export const CREDIT_MAP: Record<string, number> = {
   "25AEC12CE02X": 2,// Modern Indian Languages
   "25VEC12CE01": 2, // Human Values and Professional Ethics
   "25CEP12CE01": 2, // Community Engagement Project
-  "25DMX1": 4,      // Double Minor Course
-  "25DM31": 4,      // Introduction to CADCAM (Double Minor)
-  "25DM21": 4,      // Sensors and Actuators (Double Minor)
+  "25DMX1": 0,      // Double Minor Course (Audit)
+  "25DM01": 0,      // Double Minor Course 1 (Audit)
+  "25DM31": 0,      // Introduction to CADCAM (Double Minor - Audit)
+  "25DM21": 0,      // Sensors and Actuators (Double Minor - Audit)
+  "25DM41": 0,      // Design Thinking for Sustainability (Double Minor - Audit)
+  "25HR01": 4,      // Honors with Research 1
   "25HR02": 4,      // Honors with Research
 
   // Sem IV & Others (Legacy/Estimated - to be verified)
@@ -67,12 +70,32 @@ export const CREDIT_MAP: Record<string, number> = {
   "25PCC14CE02": 4, // Distributed Systems
   "25PCC14CE03": 3, // Blockchain Technology
   
+  
   // ========== CSE / AI&DS ==========
+  // Sem I (First Year)
+  "25BSC11CS01": 3, // Engineering Mathematics I / Applied Mathematics I
+  "25BSC11CS02": 3, // Engineering Physics / Applied Physics
+  "25ESC11CS01": 3, // Engineering Science Core I
+  "25ESC11CS02": 4, // Engineering Science Core II
+  "25PCC11CS01": 1, // Innovation and Design Thinking
+  "25PCC11CS02": 2, // Essential Computing Skills for Engineers
+  "25VSE11CS01": 2, // Measuring Instruments and Testing Tools
+  "25AEC11CS01": 2, // Ability Enhancement Course
+  
+  // Sem II & Beyond
   "25PCC12CS01": 3, // Programming Fundamentals
   "25PCC12CS02": 3, // Data Structures
   "25PCC12CS03": 3, // Algorithms
   "25PCC12CS04": 4, // Machine Learning
   "25PCC12CS05": 3, // Deep Learning
+  
+  // Sem III
+  "25BSC12CS05": 2, // Discrete Mathematics / Applied Mathematics
+  "25PCC12CS06": 4, // Data Structures (with Lab)
+  "25PCC12CS07": 1, // Programming Lab
+  "25AEC12CS02X": 2, // Ability Enhancement Course
+  "25VEC12CS01": 2, // Human Values and Professional Ethics
+  "25CEP12CS01": 2, // Community Engagement Project
   
   // ========== ELECTRONICS & COMPUTER SCIENCE (ECS) ==========
   // Sem III
@@ -93,7 +116,15 @@ export const CREDIT_MAP: Record<string, number> = {
   "25PCC12ME02": 3, // Fluid Mechanics
   "25PCC12ME03": 4, // Machine Design
   "25PCC12ME04": 3, // Manufacturing Processes
-  "25PCC12ME05": 3, // Heat Transfer
+  "25PCC12ME05": 2, // Heat Transfer
+  
+  // Sem III
+  "25BSC12ME05": 3, // Engineering Mathematics III / Applied Mathematics
+  "25PCC12ME06": 4, // Mechanics of Solids (with Lab)
+  "25PCC12ME07": 1, // Workshop Practice Lab
+  "25AEC12ME02X": 2, // Ability Enhancement Course
+  "25VEC12ME01": 2, // Human Values and Professional Ethics
+  "25CEP12ME01": 2, // Community Engagement Project
   
   // ========== ELECTIVES & MINORS ==========
   // Open Electives (2 credits each)
@@ -133,15 +164,8 @@ export const CREDIT_MAP: Record<string, number> = {
   // ========== VERIFIED FROM SYLLABUS (SCRAPED) ==========
   "25IKS11CS01": 2, // HSSM IKS Indian Knowledge System TH - -
   "25PCC11CS03": 3, // Digital Electronics --
-  "25PCC11CS01": 1, // PCPEC PCC Innovation and Design Thinking PR - -
-  "25PCC11CS02": 2, // PCPEC PCC Essential Computing Skills for Engineers PR - -
-  "25VSE11CS01": 2, // SC VSEC Measuring Instruments and Testing Tools PR - -
-  "25PCC11ME01": 1, // PCPEC PCC Innovation and Design Thinking PR - -
-  "25PCC11ME04": 2, // PCPEC PCC Essential Psychomotor Skills for Engineers PR - -
-  "25PCC11ME02": 2, // PCPEC PCC Essential Computing Skills for Engineers PR - -
-  "25VSE11ME02": 2, // SC VSEC Creative Coding in Python PR - -
-  "25VSE11ME01": 2, // SC VSEC Measuring Instruments and Testing Tools PR - -
-  "25MDMXX3": 2, // MDC MDM MDM Course- - -
+
+
   "25VSE12CE03": 2, // SC VSEC Full Stack Development PR - -
   "25EEM12CE02": 2, // HSSM EEMC Technology Entrepreneurship TH - -
   "25VSE13CE04": 2, // SC VSEC Cloud Computing Lab PR - -
@@ -158,12 +182,10 @@ export const CREDIT_MAP: Record<string, number> = {
   "25EEM12EC1X": 2, // HSSM EEMC Modern Indian Language TH -- --
   "25PCC12EC11": 1, // PCPEC PCC Web Technologies Lab PR - -
   "25EEM12EC02": 2, // HSSM EEMC Technology Entrepreneurship TH - -
-  "25PCC12ME07": 1, // PCPEC PCC Machine Shop Practice -
-  "25AEC12ME02X": 2, // HSSM AEC Modern Indian Language - -
-  "25CEP12ME01": 2, // EL CEFP Community Engagement Project PRJ - -
+
   "25VSE12ME03": 2, // SC VSEC Computer Aided Machine Drawing PR - -
   "25EEM12ME02": 2, // HSSM EEMC Technology Entrepreneurship TH - -
-  "25PCC12ME06": 4, // PCPEC PCC Engineering Mechanics -
+
   "25BSC12ME06": 3, // BSESC BSC Thermodynamics -
   "25PCC12ME08": 4, // PCPEC PCC Mechanics of Solids -
   "25PCC12ME11": 1, // PCPEC PCC Thermal Engineering Lab - -
@@ -249,8 +271,7 @@ export const CREDIT_MAP: Record<string, number> = {
  */
 const PATTERN_CREDITS: Array<{ pattern: RegExp; credit: number; description: string }> = [
   // Audit courses (0 credits) - DM = Double Minor
-  // Audit courses (0 credits) - Only specific patterns if needed, otherwise handled by explicit map
-  // { pattern: /25DM/, credit: 0, description: "Double Minor (Audit)" }, // REMOVED: 25DM can be 2/4 credits
+  { pattern: /25DM/, credit: 0, description: "Double Minor (Audit)" },
   
   // Basic Sciences (2-3 credits)
   { pattern: /25BSC/, credit: 2, description: "Basic Science Core" },

@@ -225,7 +225,7 @@ export async function POST(req: Request) {
         });
 
         sendProgress("🔐 Logging into portal...");
-        await page.goto(baseUrl + "/", { waitUntil: "domcontentloaded" });
+        await page.goto(baseUrl + "/", { waitUntil: "networkidle" });
 
         await page.fill("#username", prn.trim());
         await page.selectOption("#dd", { value: (dd.length < 2 ? "0" + dd : dd) + " " });
@@ -234,7 +234,7 @@ export async function POST(req: Request) {
 
         await Promise.all([
           page.click(".cn-login-btn"),
-          page.waitForNavigation({ waitUntil: "domcontentloaded" })
+          page.waitForNavigation({ waitUntil: "networkidle" })
         ]);
 
         if (page.url().includes("login") || await page.isVisible(".alert-error")) {
@@ -257,14 +257,14 @@ export async function POST(req: Request) {
           try {
             await Promise.all([
               link.click(),
-              page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 10000 })
+              page.waitForNavigation({ waitUntil: "networkidle", timeout: 8000 })
             ]);
           } catch (e) {
             await page.goBack({ waitUntil: "domcontentloaded" }).catch(() => {});
             continue;
           }
           
-          await page.waitForTimeout(200);
+          await page.waitForTimeout(50);
 
           const content = await page.content();
           const $$ = load(content);
@@ -308,8 +308,8 @@ export async function POST(req: Request) {
             processedCount++;
           }
           
-          await page.goBack({ waitUntil: "domcontentloaded" }).catch(() => {});
-          await page.waitForTimeout(100);
+          await page.goBack({ waitUntil: "networkidle" }).catch(() => {});
+          await page.waitForTimeout(50);
         }
 
         sendProgress("📊 Calculating your SGPA...");
