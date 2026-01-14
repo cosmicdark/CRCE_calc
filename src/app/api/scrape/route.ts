@@ -261,10 +261,6 @@ export async function POST(req: Request) {
           }
           if (!subjectName) subjectName = "Unknown Subject";
           
-          if (subjectName.includes("25DM")) {
-            await page.goBack({ waitUntil: "domcontentloaded" }).catch(() => {});
-            continue;
-          }
 
           let foundMarks: Mark[] = [];
           $$("tr").each((_, tr) => {

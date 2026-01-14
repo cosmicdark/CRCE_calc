@@ -6,3 +6,8 @@ node_modules
 npm-debug.log
 Dockerfile
 .dockerignore
+debug_*.js
+*.json
+verify_*.js
+stress_test*.js
+test_*.js

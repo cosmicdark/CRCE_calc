@@ -46,6 +46,8 @@ export const CREDIT_MAP: Record<string, number> = {
   "25VEC12CE01": 2, // Human Values and Professional Ethics
   "25CEP12CE01": 2, // Community Engagement Project
   "25DMX1": 4,      // Double Minor Course
+  "25DM31": 4,      // Introduction to CADCAM (Double Minor)
+  "25DM21": 4,      // Sensors and Actuators (Double Minor)
   "25HR02": 4,      // Honors with Research
 
   // Sem IV & Others (Legacy/Estimated - to be verified)
