@@ -31,38 +31,47 @@ function AdminContent() {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const key = searchParams.get("key");
 
-  const fetchData = async () => {
-    if (!key) {
-      setError("Admin key required. Add ?key=your_admin_key to URL");
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const res = await fetch(`/api/admin?key=${key}`);
-      if (!res.ok) {
-        if (res.status === 401) {
-          setError("Invalid admin key");
-        } else {
-          setError("Failed to fetch admin data");
-        }
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!key) {
+        setError("Admin key required. Add ?key=your_admin_key to URL");
         setLoading(false);
         return;
       }
-      const json = await res.json();
-      setData(json);
-      setError(null);
-    } catch {
-      setError("Failed to connect to server");
-    }
-    setLoading(false);
-  };
 
-  useEffect(() => {
+      try {
+        const res = await fetch(`/api/admin?key=${key}`);
+        if (!res.ok) {
+          if (res.status === 401) {
+            setError("Invalid admin key");
+          } else {
+            setError("Failed to fetch admin data");
+          }
+          setLoading(false);
+          return;
+        }
+        const json = await res.json();
+        setData(json);
+        setError(null);
+      } catch {
+        setError("Failed to connect to server");
+      }
+      setLoading(false);
+    };
+
     fetchData();
     const interval = setInterval(fetchData, 5000);
     return () => clearInterval(interval);
   }, [key]);
+
+  // Make fetchData available safely
+  const triggerRefresh = async () => {
+    if (!key) return;
+    try {
+      const res = await fetch(`/api/admin?key=${key}`);
+      if (res.ok) setData(await res.json());
+    } catch {}
+  };
 
   const clearData = async () => {
     if (!confirm("Are you sure you want to clear ALL admin data? This cannot be undone.")) {
@@ -72,7 +81,7 @@ function AdminContent() {
       const res = await fetch(`/api/admin?key=${key}`, { method: "DELETE" });
       if (res.ok) {
         alert("All data cleared!");
-        fetchData();
+        triggerRefresh();
       } else {
         alert("Failed to clear data");
       }
@@ -90,7 +99,7 @@ function AdminContent() {
       const data = await res.json();
       if (res.ok) {
         alert(data.message || "Cache cleared!");
-        fetchData();
+        triggerRefresh();
       } else {
         alert("Failed to clear cache");
       }

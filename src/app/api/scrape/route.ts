@@ -34,7 +34,7 @@ async function trackAnalytics(prn: string, isCacheHit: boolean) {
       redis.sadd("stats:unique_users", prn),    // Track unique PRNs (Set = no duplicates)
       redis.sadd(`stats:unique_daily:${today}`, prn) // Unique users today
     ]);
-  } catch (e) {
+  } catch {
     // Analytics error shouldn't break the app
   }
 }
@@ -54,23 +54,12 @@ async function syncQueueToRedis(prn?: string, action?: 'add' | 'remove') {
     } else if (prn && action === 'remove') {
       await redis.lrem("queue:waiting", 1, prn);
     }
-  } catch (e) {
+  } catch {
     // Ignore sync errors
   }
 }
 
-async function acquireSlot(): Promise<void> {
-  if (activeRequests < MAX_CONCURRENT) {
-    activeRequests++;
-    await syncQueueToRedis();
-    return;
-  }
-  return new Promise(resolve => queue.push(() => {
-    activeRequests++;
-    syncQueueToRedis();
-    resolve();
-  }));
-}
+
 
 async function releaseSlot(): Promise<void> {
   activeRequests--;
@@ -81,9 +70,7 @@ async function releaseSlot(): Promise<void> {
   }
 }
 
-function getQueuePosition(): number {
-  return queue.length + 1;
-}
+
 
 // ---------------------- TYPES ------------------------
 interface Mark { obtained: number; max: number; }
@@ -143,7 +130,7 @@ export async function POST(req: Request) {
             controller.close();
             return;
           }
-        } catch (e) {
+        } catch {
           // Cache miss, continue with scrape
         }
       }
@@ -331,8 +318,14 @@ export async function POST(req: Request) {
             
             const credits = getCredits(subjectName);
             
-            // Skip DM (Double Minor) subjects
-            if (credits === 0 && subjectName.match(/25DM/i)) {
+            // Skip DM (Double Minor), Honors, Minors, and explicitly excluded (0 credit) subjects
+            if (
+              credits === 0 || // Scrape logic returns 0 for audit/excluded courses
+              subjectName.match(/25DM|25DMX|25HXXX|25MIN/i) || 
+              subjectName.includes("Double Minor") ||
+              subjectName.includes("Honors") ||
+              subjectName.includes("Minor Degree")
+            ) {
               return null;
             }
             
@@ -389,11 +382,10 @@ export async function POST(req: Request) {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "result", data: result })}\n\n`));
       } catch (err: unknown) {
         let errorMessage = "Unknown error occurred";
-        
         if (err instanceof Error) {
-          errorMessage = err.message;
+            errorMessage = err.message;
         } else if (typeof err === "string") {
-          errorMessage = err;
+            errorMessage = err;
         }
         
         // Handle various crash/error scenarios
