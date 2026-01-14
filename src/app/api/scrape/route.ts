@@ -294,6 +294,15 @@ export async function POST(req: Request) {
           });
 
           if (foundMarks.length > 0) {
+            const credits = getCredits(subjectName);
+            
+            // Skip DM (Double Minor) subjects - they are audit courses
+            if (credits === 0 && subjectName.match(/25DM/i)) {
+              await page.goBack({ waitUntil: "networkidle" }).catch(() => {});
+              await page.waitForTimeout(50);
+              continue;
+            }
+            
             let totalObt = 0, totalMax = 0;
             foundMarks.forEach(m => { totalObt += m.obtained; totalMax += m.max; });
             const percentage = totalMax > 0 ? Math.round((totalObt / totalMax) * 10000) / 100 : null;
@@ -303,7 +312,7 @@ export async function POST(req: Request) {
               subjectName, marks: foundMarks.map(m => `${m.obtained}/${m.max}`), 
               totalObt: Math.round(totalObt * 100) / 100, totalMax, 
               percentage, grade, gradePoint: gradeToPoint[grade],
-              credits: getCredits(subjectName)
+              credits
             });
             processedCount++;
           }
