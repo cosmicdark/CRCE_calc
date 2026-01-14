@@ -119,22 +119,24 @@ export default function Home() {
   const [result, setResult] = useState<Result | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("Starting...");
+  const [fromCache, setFromCache] = useState(false);
 
   const toggleDarkMode = () => setIsDarkMode(!isDarkMode);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent, forceRefresh = false) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
     setResult(null);
-    setLoadingMessage("Starting...");
+    setFromCache(false);
+    setLoadingMessage(forceRefresh ? "Refreshing..." : "Starting...");
 
     try {
       // Use fetch with streaming for real-time progress
       const response = await fetch("/api/scrape", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prn, dob }),
+        body: JSON.stringify({ prn, dob, forceRefresh }),
       });
 
       if (!response.ok && response.headers.get("content-type")?.includes("application/json")) {
@@ -164,6 +166,7 @@ export default function Home() {
               setLoadingMessage(data.message);
             } else if (data.type === "result") {
               setResult(data.data);
+              setFromCache(data.fromCache === true);
             } else if (data.type === "error") {
               // Set error directly instead of throwing (which would be caught by inner catch)
               setError(data.error);
@@ -439,12 +442,29 @@ export default function Home() {
                   >
                     Subject Wise
                   </h3>
-                  <button
-                    onClick={() => setResult(null)}
-                    className="text-sm text-gray-500 hover:text-emerald-600"
-                  >
-                    Check Another
-                  </button>
+                  <div className="flex gap-2">
+                    {fromCache && (
+                      <button
+                        onClick={(e) => handleSubmit(e, true)}
+                        disabled={loading}
+                        className="text-sm text-emerald-600 hover:text-emerald-700 font-medium flex items-center gap-1"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                          <path d="M3 3v5h5"/>
+                          <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
+                          <path d="M16 21h5v-5"/>
+                        </svg>
+                        Refresh
+                      </button>
+                    )}
+                    <button
+                      onClick={() => { setResult(null); setFromCache(false); }}
+                      className="text-sm text-gray-500 hover:text-emerald-600"
+                    >
+                      Check Another
+                    </button>
+                  </div>
                 </div>
 
                 {result.subjects.map((sub, idx) => (

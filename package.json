@@ -10,8 +10,12 @@
   },
   "dependencies": {
     "@sparticuz/chromium-min": "^143.0.4",
+    "@upstash/redis": "^1.36.1",
+    "axios": "^1.13.2",
     "cheerio": "^1.1.2",
     "next": "^16.0.10",
+    "pdf-parse": "^2.4.5",
+    "pdfjs-dist": "^5.4.530",
     "playwright-core": "^1.57.0",
     "react": "19.2.1",
     "react-dom": "19.2.1"
@@ -21,6 +25,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "dotenv": "^17.2.3",
     "eslint": "^9",
     "eslint-config-next": "16.0.8",
     "playwright": "^1.57.0",
@@ -28,6 +33,6 @@
     "typescript": "^5"
   },
   "engines": {
-    "node": "20.x"
+    "node": ">=20"
   }
 }

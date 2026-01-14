@@ -1,0 +1,14 @@
+[PROGRESS] ✅ Retrieved from cache (instant!) - Use 'Refresh' button for latest data (undefined/?)
+--- RESULT ---
+SGPA: 8.55
+Total Marks: 847.6 / 1100
+- DISCRETE MATHEMATICS AND GRAPH... | Obt: 68.23/100 | Gr: C | Cr: 2
+- COMPUTER ORGANIZATION AND ARCH... | Obt: 105.5/150 | Gr: B | Cr: 3
+- DATA STRUCTURES( 25PCC12CE06)... | Obt: 160/200 | Gr: A | Cr: 4
+- OBJECT ORIENTED  PROGRAMMING W... | Obt: 38/50 | Gr: B | Cr: 1
+- HUMAN VALUES AND PROFESSIONAL ... | Obt: 92/100 | Gr: O | Cr: 2
+- COMMUNITY ENGAGEMENT  PROJECT(... | Obt: 87/100 | Gr: O | Cr: 2
+- KANNADA FOR BEGINNERS( 25AEC12... | Obt: 89.87/100 | Gr: O | Cr: 2
+- FINANCIAL ACCOUNTING( 25MDMBM1... | Obt: 55/100 | Gr: D | Cr: 2
+- FINANCIAL PLANNING TAXATION AN... | Obt: 81/100 | Gr: A | Cr: 2
+- ECONOMICS FOR BUSINESS( 25MDMB... | Obt: 71/100 | Gr: B | Cr: 2

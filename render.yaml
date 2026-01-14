@@ -1,0 +1,19 @@
+# Render.com deployment configuration for CRCE Results App
+services:
+  - type: web
+    name: crce-results
+    runtime: node
+    region: singapore  # Closest to India
+    plan: free
+    buildCommand: npm install && npx playwright install chromium --with-deps && npm run build
+    startCommand: npm run start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: 20.11.0
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
