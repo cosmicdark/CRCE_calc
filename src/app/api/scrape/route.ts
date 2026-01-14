@@ -33,7 +33,7 @@ async function trackAnalytics(prn: string, isCacheHit: boolean) {
 
 // ---------------------- QUEUE ----------------------
 let activeRequests = 0;
-const MAX_CONCURRENT = 2; // Balanced for Railway free tier (512 MB RAM)
+const MAX_CONCURRENT = 4; // Increased capacity with parallel HTTP fetch (low memory)
 const queue: Array<() => void> = [];
 
 // Sync queue state to Redis for admin panel
@@ -243,82 +243,121 @@ export async function POST(req: Request) {
 
         sendProgress("📚 Finding your subjects...");
         
-        let cieLinksCount = await page.locator('a[href*="task=ciedetails"]').count();
-        if (cieLinksCount === 0) throw new Error("No subjects found on dashboard");
-
-        const subjects: Subject[] = [];
-        let processedCount = 0;
+        // Get dashboard HTML to find subject URLs
+        const dashboardHtml = await page.content();
+        const dashboard$ = load(dashboardHtml);
+        const subjectUrls: string[] = [];
         
-        for (let i = 0; i < cieLinksCount; i++) {
-          sendProgress(`📖 Reading subject ${i + 1}/${cieLinksCount}...`, i + 1, cieLinksCount);
-          
-          const link = page.locator('a[href*="task=ciedetails"]').nth(i);
-          
-          try {
-            await Promise.all([
-              link.click(),
-              page.waitForNavigation({ waitUntil: "networkidle", timeout: 8000 })
-            ]);
-          } catch (e) {
-            await page.goBack({ waitUntil: "domcontentloaded" }).catch(() => {});
-            continue;
+        dashboard$('a[href*="task=ciedetails"]').each((_, el) => {
+          const href = dashboard$(el).attr('href');
+          if (href) {
+            let fullUrl: string;
+            if (href.startsWith('http')) {
+              fullUrl = href;
+            } else if (href.startsWith('/')) {
+              fullUrl = 'https://crce-students.contineo.in' + href;
+            } else {
+              fullUrl = baseUrl + '/' + href;
+            }
+            subjectUrls.push(fullUrl);
           }
-          
-          await page.waitForTimeout(50);
-
-          const content = await page.content();
-          const $$ = load(content);
-
-          let subjectName = $$("caption").first().text().trim();
-          if (!subjectName) {
-            $$("h3, .uk-h3").each((_, el) => {
+        });
+        
+        if (subjectUrls.length === 0) throw new Error("No subjects found on dashboard");
+        
+        // Get cookies for HTTP requests
+        const cookies = await context.cookies();
+        const cookieHeader = cookies.map((c: { name: string; value: string }) => `${c.name}=${c.value}`).join('; ');
+        
+        sendProgress(`🚀 Parallel fetching ${subjectUrls.length} subjects...`);
+        
+        // Helper: fetch and parse one subject with timeout
+        async function fetchSubject(url: string): Promise<Subject | null> {
+          try {
+            // Create timeout for fetch
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+            
+            const response = await fetch(url, {
+              headers: {
+                'Cookie': cookieHeader,
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0'
+              },
+              signal: controller.signal
+            });
+            
+            clearTimeout(timeout);
+            
+            if (!response.ok) return null;
+            
+            const html = await response.text();
+            const $$ = load(html);
+            
+            // Check if redirected to login
+            if (html.includes('Login to Your Account')) return null;
+            
+            let subjectName = $$("caption").first().text().trim();
+            if (!subjectName) {
+              $$("h3, .uk-h3").each((_, el) => {
                 const t = $$(el).text().trim();
                 if (t.match(/\d{2}[A-Z]{2,3}\d{2}[A-Z]{2}\d{2}/) || t.length > 5) {
-                    subjectName = t; return false;
+                  subjectName = t;
+                  return false;
                 }
-            });
-          }
-          if (!subjectName) subjectName = "Unknown Subject";
-          
-
-          let foundMarks: Mark[] = [];
-          $$("tr").each((_, tr) => {
+              });
+            }
+            if (!subjectName) return null;
+            
+            let foundMarks: Mark[] = [];
+            $$("tr").each((_, tr) => {
               const cells = $$(tr).find("td").map((_, td) => $$(td).text().trim()).get();
               const parsedRow = cells.filter(c => c.match(/\d+(\.\d+)?\s*\/\s*\d+/))
-                  .map(m => parseMark(m)).filter((x): x is Mark => x !== null);
-              
+                .map(m => parseMark(m)).filter((x): x is Mark => x !== null);
               if (parsedRow.length > 0) {
-                  foundMarks = parsedRow;
-                  return false;
+                foundMarks = parsedRow;
+                return false;
               }
-          });
-
-          if (foundMarks.length > 0) {
+            });
+            
+            if (foundMarks.length === 0) return null;
+            
             const credits = getCredits(subjectName);
             
-            // Skip DM (Double Minor) subjects - they are audit courses
+            // Skip DM (Double Minor) subjects
             if (credits === 0 && subjectName.match(/25DM/i)) {
-              await page.goBack({ waitUntil: "networkidle" }).catch(() => {});
-              await page.waitForTimeout(50);
-              continue;
+              return null;
             }
             
             let totalObt = 0, totalMax = 0;
             foundMarks.forEach(m => { totalObt += m.obtained; totalMax += m.max; });
             const percentage = totalMax > 0 ? Math.round((totalObt / totalMax) * 10000) / 100 : null;
             const grade = percentage !== null ? percentToGrade(percentage) : "NA";
-
-            subjects.push({
-              subjectName, marks: foundMarks.map(m => `${m.obtained}/${m.max}`), 
-              totalObt: Math.round(totalObt * 100) / 100, totalMax, 
-              percentage, grade, gradePoint: gradeToPoint[grade],
+            
+            return {
+              subjectName,
+              marks: foundMarks.map(m => `${m.obtained}/${m.max}`),
+              totalObt: Math.round(totalObt * 100) / 100,
+              totalMax,
+              percentage,
+              grade,
+              gradePoint: gradeToPoint[grade],
               credits
-            });
-            processedCount++;
+            };
+          } catch {
+            return null;
           }
-          
-          await page.goBack({ waitUntil: "networkidle" }).catch(() => {});
-          await page.waitForTimeout(50);
+        }
+        
+        // Fetch ALL subjects in parallel
+        const startFetch = Date.now();
+        const results = await Promise.all(subjectUrls.map(url => fetchSubject(url)));
+        const subjects = results.filter((r): r is Subject => r !== null);
+        
+        console.log(`[Parallel] Fetched ${subjects.length}/${subjectUrls.length} subjects in ${Date.now() - startFetch}ms`);
+        
+        // Safety check: ensure we got at least some subjects
+        if (subjects.length === 0) {
+          throw new Error("Could not fetch any subjects. Session may have expired. Please try again.");
         }
 
         sendProgress("📊 Calculating your SGPA...");
@@ -341,19 +380,48 @@ export async function POST(req: Request) {
 
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "result", data: result })}\n\n`));
       } catch (err: any) {
-        let errorMessage = err.message;
+        let errorMessage = err?.message || "Unknown error occurred";
         
-        // Handle OOM / Browser crash specific errors
+        // Handle various crash/error scenarios
         if (errorMessage.includes("Target closed") || 
             errorMessage.includes("Protocol error") || 
-            errorMessage.includes("browser has been closed")) {
-          console.error("Browser crash potential OOM:", errorMessage);
+            errorMessage.includes("browser has been closed") ||
+            errorMessage.includes("Browser closed") ||
+            errorMessage.includes("Execution context was destroyed")) {
+          console.error("[CRASH] Browser crash/OOM:", errorMessage);
           errorMessage = "Server busy (High Traffic). Please try again in 30 seconds.";
+        } else if (errorMessage.includes("Navigation timeout") ||
+                   errorMessage.includes("Timeout") ||
+                   errorMessage.includes("timeout")) {
+          console.error("[TIMEOUT] Navigation timeout:", errorMessage);
+          errorMessage = "Portal is slow to respond. Please try again.";
+        } else if (errorMessage.includes("net::ERR") ||
+                   errorMessage.includes("ECONNREFUSED") ||
+                   errorMessage.includes("fetch failed")) {
+          console.error("[NETWORK] Network error:", errorMessage);
+          errorMessage = "Cannot reach the portal. Please check your connection.";
+        } else if (errorMessage.includes("Invalid credentials")) {
+          // Keep as is - user-facing error
+        } else if (errorMessage.includes("No subjects found")) {
+          // Keep as is - user-facing error
+        } else {
+          console.error("[ERROR] Unexpected error:", errorMessage);
+          // Don't expose internal errors
+          if (!errorMessage.includes("PRN") && !errorMessage.includes("DOB")) {
+            errorMessage = "Something went wrong. Please try again.";
+          }
         }
         
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "error", error: errorMessage })}\n\n`));
       } finally {
-        if (browser) await browser.close().catch(() => {});
+        // Always clean up browser
+        if (browser) {
+          try {
+            await browser.close();
+          } catch (closeErr) {
+            console.error("[CLEANUP] Failed to close browser:", closeErr);
+          }
+        }
         releaseSlot();
       }
       controller.close();

@@ -1,17 +1,20 @@
-# Render.com deployment configuration for CRCE Results App
+# Render.com configuration
+# Documentation: https://render.com/docs/blueprint-spec
+
 services:
   - type: web
     name: crce-results
     runtime: docker
-    region: singapore
-    plan: free
     dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free  # or starter for more resources
+    healthCheckPath: /
     envVars:
       - key: NODE_ENV
         value: production
+      - key: PORT
+        value: 3000
       - key: UPSTASH_REDIS_REST_URL
-        sync: false
+        sync: false  # Set manually in dashboard
       - key: UPSTASH_REDIS_REST_TOKEN
-        sync: false
-      - key: ADMIN_KEY
-        sync: false
+        sync: false  # Set manually in dashboard

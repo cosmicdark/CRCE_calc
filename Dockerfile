@@ -3,6 +3,10 @@ FROM mcr.microsoft.com/playwright:v1.57.0-jammy
 
 WORKDIR /app
 
+# Set environment variables
+ENV NODE_ENV=production
+ENV PORT=3000
+
 # Copy package files
 COPY package*.json ./
 
@@ -17,7 +21,11 @@ COPY . .
 # Build the app
 RUN npm run build
 
-# Expose port
+# Health check for container orchestrators
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:3000/ || exit 1
+
+# Expose port (Railway and Render both use PORT env variable)
 EXPOSE 3000
 
 # Start the app
